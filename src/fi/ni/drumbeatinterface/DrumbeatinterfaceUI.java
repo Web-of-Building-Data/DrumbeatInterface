@@ -12,11 +12,14 @@ import com.vaadin.data.Item;
 import com.vaadin.data.Property.ValueChangeEvent;
 import com.vaadin.data.Property.ValueChangeListener;
 import com.vaadin.server.ExternalResource;
+import com.vaadin.server.FileResource;
 import com.vaadin.server.VaadinRequest;
+import com.vaadin.server.VaadinService;
 import com.vaadin.server.VaadinServlet;
 import com.vaadin.ui.BrowserFrame;
 import com.vaadin.ui.Button;
 import com.vaadin.ui.HorizontalLayout;
+import com.vaadin.ui.Image;
 import com.vaadin.ui.Label;
 import com.vaadin.ui.OptionGroup;
 import com.vaadin.ui.Panel;
@@ -80,12 +83,18 @@ public class DrumbeatinterfaceUI extends UI {
 
 	@Override
 	protected void init(VaadinRequest request) {
+		String basepath = VaadinService.getCurrent()
+                .getBaseDirectory().getAbsolutePath();
+		// Image as a file resource
+		FileResource resource = new FileResource(new File(basepath +
+		                        "/WEB-INF/images/drumbeat_banner.jpg"));
 
+		// Show the image in the application
+		Image drumbeat_logo = new Image("Aalto University Drumbeat User Interface", resource);
 		final VerticalLayout layout = new VerticalLayout();
 		setContent(layout);
+		layout.addComponent(drumbeat_logo);
 
-		Label label = new Label("Aalto University Drumbeat User Interface");
-		layout.addComponent(label);
 		layout.setMargin(true);
 		layout.addComponent(tabsheet);
 
@@ -109,6 +118,7 @@ public class DrumbeatinterfaceUI extends UI {
 		tab_upload.setCaption("Upload a model");
 		tabsheet.addTab(tab_upload);
 		Panel p1 = new Panel("Upload and convert an IFC file");
+		p1.setWidth("900");
 		tab_upload.addComponent(p1);
 		
 		HorizontalLayout hor1 = new HorizontalLayout();
