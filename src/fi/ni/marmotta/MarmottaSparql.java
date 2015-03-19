@@ -20,13 +20,15 @@ import org.openrdf.repository.sparql.SPARQLRepository;
 
 public class MarmottaSparql {
 	final String base = "http://drumbeat.cs.hut.fi/tomcat/marmotta/resource/";
+	final String voidBase = "http://rdfs.org/ns/void#";
 	final String queryStr;
 	final SPARQLRepository repository_query;
 	final SPARQLRepository repository_update;	
 	
 	ValueFactory f=null;
 	URI realEstate_class=null;
-
+	URI void_dataset_class=null;
+	URI realEstate_dataset_property=null;
 	public MarmottaSparql() {
 		repository_query = new SPARQLRepository(
 				"http://drumbeat.cs.hut.fi/tomcat/marmotta/sparql/select");
@@ -37,7 +39,9 @@ public class MarmottaSparql {
 			repository_update.initialize();
 			
 			f = repository_update.getValueFactory();
+			void_dataset_class = f.createURI(voidBase,"Dataset");
 			realEstate_class = f.createURI(base, "RealEstate");
+			realEstate_dataset_property = f.createURI(base, "dataset");
 		} catch (RepositoryException e) {
 			e.printStackTrace();
 		}
@@ -80,7 +84,6 @@ public class MarmottaSparql {
 		try {
 			RepositoryConnection con_update;
 			con_update = repository_update.getConnection();
-			con_update.setNamespace("drumbeat", base);
 			con_update.begin(); // start the transaction
 			URI project = f.createURI(base, project_name);
 			con_update.add(project, RDF.TYPE, realEstate_class);
@@ -94,10 +97,39 @@ public class MarmottaSparql {
 		try {
 			RepositoryConnection con_update;
 			con_update = repository_update.getConnection();
-			con_update.setNamespace("drumbeat", base);
 			con_update.begin(); // start the transaction
 			URI project = f.createURI(base, project_name);
 			con_update.remove(project, RDF.TYPE, realEstate_class);
+			con_update.commit();
+		} catch (RepositoryException e) {
+			e.printStackTrace();
+		}
+	}
+	
+	public void attach_dataset(String project_name,String dataset_name) {
+		try {
+			RepositoryConnection con_update;
+			con_update = repository_update.getConnection();
+			con_update.begin(); // start the transaction			
+			URI project = f.createURI(base, project_name);
+			URI dataset = f.createURI(base, dataset_name);
+			con_update.add(project, realEstate_dataset_property, dataset);
+			con_update.add(dataset, RDF.TYPE, void_dataset_class);
+			con_update.commit();
+		} catch (RepositoryException e) {
+			e.printStackTrace();
+		}
+	}
+
+	public void detatch_dataset(String project_name,String dataset_name) {
+		try {
+			RepositoryConnection con_update;
+			con_update = repository_update.getConnection();
+			con_update.begin(); // start the transaction			
+			URI project = f.createURI(base, project_name);
+			URI dataset = f.createURI(base, dataset_name);
+			con_update.remove(project, realEstate_dataset_property, dataset);
+			con_update.remove(dataset, RDF.TYPE, void_dataset_class);
 			con_update.commit();
 		} catch (RepositoryException e) {
 			e.printStackTrace();

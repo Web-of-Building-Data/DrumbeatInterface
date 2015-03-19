@@ -83,6 +83,7 @@ public class DrumbeatinterfaceUI extends UI {
 	final TextField url_textField = new TextField();
 	final TextField realEstate_textField = new TextField();
 	final Tree realEstates_tree = new Tree("Real estates");
+	final Tree realEstates_tree_4upload = new Tree("Attach the model to a real estate");
 	// A map for project selections
 	Map<Integer, Long> bim_projects = new HashMap<Integer, Long>();
 
@@ -171,7 +172,12 @@ public class DrumbeatinterfaceUI extends UI {
 		converter_selection.addItem("Lite");
 		converter_selection.addItem("Ghent Multimedia Lab, buildingSMART");
 		converter_selection.setValue("Default");
-		hor1.addComponent(converter_selection);
+		
+		VerticalLayout upload_selections = new VerticalLayout();
+		hor1.addComponent(upload_selections);
+		
+		upload_selections.addComponent(converter_selection);
+		upload_selections.addComponent(realEstates_tree_4upload);
 		VerticalLayout upload_panels = new VerticalLayout();
 		hor1.addComponent(upload_panels);
 		
@@ -248,9 +254,13 @@ public class DrumbeatinterfaceUI extends UI {
 	public void listRealEstates()
 	{
 		realEstates_tree.removeAllItems();
+		realEstates_tree_4upload.removeAllItems();
 		List<String> realEstate_names=marmotta.httpGetDRUMRealEstates();
 		for(String name:realEstate_names)
+		{
 			realEstates_tree.addItem(name);
+			realEstates_tree_4upload.addItem(name);
+		}
 	}
 	
 	public void updateData()
