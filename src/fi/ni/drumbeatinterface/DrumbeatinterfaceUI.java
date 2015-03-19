@@ -2,6 +2,7 @@ package fi.ni.drumbeatinterface;
 
 import java.io.File;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import javax.servlet.annotation.WebServlet;
@@ -20,18 +21,19 @@ import com.vaadin.ui.BrowserFrame;
 import com.vaadin.ui.Button;
 import com.vaadin.ui.HorizontalLayout;
 import com.vaadin.ui.Image;
-import com.vaadin.ui.Label;
 import com.vaadin.ui.OptionGroup;
 import com.vaadin.ui.Panel;
 import com.vaadin.ui.TabSheet;
 import com.vaadin.ui.Table;
 import com.vaadin.ui.TextField;
+import com.vaadin.ui.Tree;
 import com.vaadin.ui.UI;
 import com.vaadin.ui.Upload;
 import com.vaadin.ui.VerticalLayout;
 
 import fi.ni.bimserver.BIMServerJSONApi;
 import fi.ni.marmotta.MarmottaAPI;
+import fi.ni.marmotta.MarmottaSparql;
 
 /*
  * The MIT License (MIT)
@@ -66,6 +68,7 @@ public class DrumbeatinterfaceUI extends UI {
 	public static class Servlet extends VaadinServlet {
 	}
 	final MarmottaAPI marmotta=new MarmottaAPI();
+	final MarmottaSparql marmotta_sparql =new MarmottaSparql();
 	final BIMServerJSONApi bimserver_jsonapi=new BIMServerJSONApi();
 	private String uploads = "/var/uploads/";
 	//private String uploads= "c:/jo/uploads/";
@@ -78,8 +81,10 @@ public class DrumbeatinterfaceUI extends UI {
 	final Table bim_projects_table = new Table("as seen by drumcsbeat@gmail.com");
 	final public OptionGroup converter_selection = new OptionGroup("Optionally an IFC to RDF converter can be selected");
 	final TextField url_textField = new TextField();
+	final TextField realEstate_textField = new TextField();
+	final Tree realEstates_tree = new Tree("Real estates");
 	// A map for project selections
-	Map<Integer, Long> projects = new HashMap<Integer, Long>();
+	Map<Integer, Long> bim_projects = new HashMap<Integer, Long>();
 
 	@Override
 	protected void init(VaadinRequest request) {
@@ -109,24 +114,58 @@ public class DrumbeatinterfaceUI extends UI {
 		tab_home.addComponent(browser);
 		
 
-		VerticalLayout tab_project = new VerticalLayout();
-		tab_project.setCaption("Project");
-		tabsheet.addTab(tab_project);
+		VerticalLayout tab_realEstate = new VerticalLayout();
+		tab_realEstate.setCaption("Real Estates");
+		tabsheet.addTab(tab_realEstate);
+		
+		Panel p_project = new Panel("Create a new real estate");		
+		p_project.setWidth("400");
+		tab_realEstate.addComponent(p_project);
+		tab_realEstate.addComponent(realEstates_tree);
+		
+		realEstate_textField.setImmediate(true);
+	    Button newRealEstate_button = new Button("Create", new Button.ClickListener() {
+	      @Override
+	      public void buttonClick(Button.ClickEvent event) {
+	    	  String realEstate_name=realEstate_textField.getValue();
+	    	  if(realEstate_name!=null && realEstate_name.length()>0)
+	    	  {
+	    	    marmotta_sparql.create_RealEstate(realEstate_name);
+	    	    listRealEstates();
+	    	  }
+	      }
+	    });
+	    HorizontalLayout newproject_layout = new HorizontalLayout();
+	    newproject_layout.setSizeUndefined(); 
+	    newproject_layout.addComponent(realEstate_textField);
+	    newproject_layout.addComponent(newRealEstate_button);
+	    newproject_layout.setSpacing(true);	    
+	    p_project.setContent(newproject_layout);
+	    Button removeRealEstate_button = new Button("Remove the selected real estate", new Button.ClickListener() {
+		      @Override
+		      public void buttonClick(Button.ClickEvent event) {
+		    	  String realEstate_name=(String)realEstates_tree.getValue();
+		    	  if(realEstate_name!=null && realEstate_name.length()>0)
+		    	  {
+		    	    marmotta_sparql.remove_RealEstate(realEstate_name);
+		    	    listRealEstates();
+		    	  }
+		      }
+		    });
+	    tab_realEstate.addComponent(removeRealEstate_button);
 
 		
 		VerticalLayout tab_upload = new VerticalLayout();
 		tab_upload.setCaption("Upload a model");
 		tabsheet.addTab(tab_upload);
-		Panel p1 = new Panel("Upload and convert an IFC file");
-		p1.setWidth("900");
-		tab_upload.addComponent(p1);
+		Panel p_model = new Panel("Upload and convert an IFC file");
+		p_model.setWidth("900");
+		tab_upload.addComponent(p_model);
 		
 		HorizontalLayout hor1 = new HorizontalLayout();
 		hor1.setSizeFull(); // Use all available space
 		hor1.setMargin(true);
-		p1.setContent(hor1);
-		
-
+		p_model.setContent(hor1);
 		
 		converter_selection.addItem("Default");
 		converter_selection.addItem("Lite");
@@ -136,22 +175,20 @@ public class DrumbeatinterfaceUI extends UI {
 		VerticalLayout upload_panels = new VerticalLayout();
 		hor1.addComponent(upload_panels);
 		
-		Panel p1file = new Panel("Upload a file");
-		//p1file.setSizeUndefined();  // to avoid scrollbar
-		p1file.setWidth("400");
-		upload_panels.addComponent(p1file);
+		Panel p_model_file = new Panel("Upload a file");
+		p_model_file.setWidth("400");
+		upload_panels.addComponent(p_model_file);
 		
-		Panel p1url = new Panel("Upload from a URL");
-		//p1url.setSizeUndefined();  // to avoid scrollbar
-		p1url.setWidth("400");
-		upload_panels.addComponent(p1url);
+		Panel p_model_url = new Panel("Upload from a URL");
+		p_model_url.setWidth("400");
+		upload_panels.addComponent(p_model_url);
 
 		
 		// Create the upload with a caption and set receiver later
 		Upload upload = new Upload("Select a file and press Upload", drumbeat_fileReceiver);
 		upload.addSucceededListener(drumbeat_fileReceiver);
 		upload.addFailedListener(drumbeat_fileReceiver);
-		p1file.setContent(upload);
+		p_model_file.setContent(upload);
 		
 		url_textField.setImmediate(true);
 	    Button button = new Button("Upload from the URL", new Button.ClickListener() {
@@ -166,7 +203,7 @@ public class DrumbeatinterfaceUI extends UI {
 	    url_upload.addComponent(url_textField);
 	    url_upload.addComponent(button);
 	    url_upload.setSpacing(true);	    
-	    p1url.setContent(url_upload);
+	    p_model_url.setContent(url_upload);
 		
 		files_table.addContainerProperty("File name", String.class, null);
 		listIFCFiles();
@@ -189,9 +226,9 @@ public class DrumbeatinterfaceUI extends UI {
 		bim_projects_table.addValueChangeListener(new ValueChangeListener() {
 			public void valueChange(ValueChangeEvent event) {
 
-				if (projects.size() > 0) {
+				if (bim_projects.size() > 0) {
 					showBIMProject(project_browser,
-							projects.get(bim_projects_table.getValue()));
+							bim_projects.get(bim_projects_table.getValue()));
 				}
 			}
 		});
@@ -205,14 +242,22 @@ public class DrumbeatinterfaceUI extends UI {
 		contexts_table.addContainerProperty("Size", Long.class, null);
 		tab_marmotta.addComponent(contexts_table);
         updateData();
+        listRealEstates();
+	}
+	
+	public void listRealEstates()
+	{
+		realEstates_tree.removeAllItems();
+		List<String> realEstate_names=marmotta.httpGetDRUMRealEstates();
+		for(String name:realEstate_names)
+			realEstates_tree.addItem(name);
 	}
 	
 	public void updateData()
 	{
 		listIFCFiles();
 		marmotta.httpGetMarmottaContexts(contexts_table);
-		bimserver_jsonapi.getProjects(bim_projects_table,projects);
-		
+		bimserver_jsonapi.getProjects(bim_projects_table,bim_projects);		
 	}
 
 	private void listIFCFiles() {
