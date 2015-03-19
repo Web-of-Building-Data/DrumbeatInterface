@@ -206,6 +206,7 @@ public class DrumbeatFileHandler implements Receiver, SucceededListener,
 					"http://drumbeat.cs.hut.fi/tomcat/marmotta/context/"
 							+ fname_array[0]);
 			prop.setProperty("label", fname_array[0]);
+			parent.createModel(fname_array[0]);
 			// save properties to project root folder
 			prop.store(output, null);
 		} catch (Exception e) {

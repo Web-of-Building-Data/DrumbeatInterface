@@ -1,9 +1,7 @@
 package fi.ni.marmotta;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 import org.openrdf.model.URI;
 import org.openrdf.model.ValueFactory;
@@ -20,15 +18,17 @@ import org.openrdf.repository.sparql.SPARQLRepository;
 
 public class MarmottaSparql {
 	final String base = "http://drumbeat.cs.hut.fi/tomcat/marmotta/resource/";
-	final String voidBase = "http://rdfs.org/ns/void#";
-	final String queryStr;
+	final String realEstatesQueryStr;
+	final String modelsQueryStr;
+	final String realEstateModelsQueryStr;
+	final String realEstateModelsQueryStr_simplified;
 	final SPARQLRepository repository_query;
 	final SPARQLRepository repository_update;	
 	
 	ValueFactory f=null;
 	URI realEstate_class=null;
-	URI void_dataset_class=null;
-	URI realEstate_dataset_property=null;
+	URI model_class=null;
+	URI realEstate_model_property=null;
 	public MarmottaSparql() {
 		repository_query = new SPARQLRepository(
 				"http://drumbeat.cs.hut.fi/tomcat/marmotta/sparql/select");
@@ -39,13 +39,16 @@ public class MarmottaSparql {
 			repository_update.initialize();
 			
 			f = repository_update.getValueFactory();
-			void_dataset_class = f.createURI(voidBase,"Dataset");
+			model_class = f.createURI(base,"Model");
 			realEstate_class = f.createURI(base, "RealEstate");
-			realEstate_dataset_property = f.createURI(base, "dataset");
+			realEstate_model_property = f.createURI(base, "model");
 		} catch (RepositoryException e) {
 			e.printStackTrace();
 		}
-		queryStr= "select $s where {?s <" + RDF.TYPE + "> <"+ realEstate_class.stringValue() + ">} LIMIT 100";
+		realEstatesQueryStr= "select $s where {?s <" + RDF.TYPE + "> <"+ realEstate_class.stringValue() + ">.} LIMIT 100";
+		modelsQueryStr= "select $s where {?s <" + RDF.TYPE + "> <"+ model_class.stringValue() + ">.} LIMIT 100";
+		realEstateModelsQueryStr="select $s $o where {?s <" + RDF.TYPE + "> <"+ realEstate_class.stringValue() + ">. ?s <" + realEstate_model_property + "> ?o.} LIMIT 100";
+		realEstateModelsQueryStr_simplified="select $s $o where {?s <" + realEstate_model_property + "> ?o.} LIMIT 100";
 	}
 
 	// Does not work in the Tomcat/Vaadin environment. Some library at the wrong level?
@@ -60,7 +63,7 @@ public class MarmottaSparql {
 			con_query.setNamespace("drumbeat", base);
 			
 			TupleQuery tupleQuery = con_query.prepareTupleQuery(QueryLanguage.SPARQL,
-					queryStr);
+					realEstatesQueryStr);
 			TupleQueryResult result = tupleQuery.evaluate();
 			while (result.hasNext()) {
 				BindingSet row = result.next();
@@ -80,6 +83,91 @@ public class MarmottaSparql {
 		return ret;
 	}
 
+	public List<String> getModels() {
+		List<String> ret=new ArrayList<String>();
+		try {
+			RepositoryConnection con_query;
+			con_query = repository_query.getConnection();			
+			con_query.setNamespace("drumbeat", base);
+			
+			TupleQuery tupleQuery = con_query.prepareTupleQuery(QueryLanguage.SPARQL,
+					modelsQueryStr);
+			TupleQueryResult result = tupleQuery.evaluate();
+			while (result.hasNext()) {
+				BindingSet row = result.next();
+				String s=row.getBinding("s").toString();
+				if(s!=null)
+				ret.add(s.substring(s.lastIndexOf('/')+1,s.length()));
+				System.out.println();
+			}
+		} catch (QueryEvaluationException e) {
+
+			e.printStackTrace();
+		} catch (MalformedQueryException e) {
+			e.printStackTrace();
+		} catch (RepositoryException e) {
+			e.printStackTrace();
+		}
+		return ret;
+	}
+
+	public List<String> getRealEstateModels() {
+		List<String> ret=new ArrayList<String>();
+		try {
+			RepositoryConnection con_query;
+			con_query = repository_query.getConnection();			
+			con_query.setNamespace("drumbeat", base);
+			
+			TupleQuery tupleQuery = con_query.prepareTupleQuery(QueryLanguage.SPARQL,
+					realEstateModelsQueryStr);
+			System.out.println(realEstateModelsQueryStr);
+			TupleQueryResult result = tupleQuery.evaluate();
+			while (result.hasNext()) {
+				BindingSet row = result.next();
+				String s=row.getBinding("s").toString();
+				String o=row.getBinding("o").toString();
+				System.out.println(s+" "+o);
+			}
+		} catch (QueryEvaluationException e) {
+
+			e.printStackTrace();
+		} catch (MalformedQueryException e) {
+			e.printStackTrace();
+		} catch (RepositoryException e) {
+			e.printStackTrace();
+		}
+		return ret;
+	}
+
+	public List<String> getRealEstateModelsSimplified() {
+		List<String> ret=new ArrayList<String>();
+		try {
+			RepositoryConnection con_query;
+			con_query = repository_query.getConnection();			
+			con_query.setNamespace("drumbeat", base);
+			
+			TupleQuery tupleQuery = con_query.prepareTupleQuery(QueryLanguage.SPARQL,
+					realEstateModelsQueryStr);
+			System.out.println(realEstateModelsQueryStr);
+			TupleQueryResult result = tupleQuery.evaluate();
+			while (result.hasNext()) {
+				BindingSet row = result.next();
+				String s=row.getBinding("s").toString();
+				String o=row.getBinding("o").toString();
+				System.out.println(s+" "+o);
+			}
+		} catch (QueryEvaluationException e) {
+
+			e.printStackTrace();
+		} catch (MalformedQueryException e) {
+			e.printStackTrace();
+		} catch (RepositoryException e) {
+			e.printStackTrace();
+		}
+		return ret;
+	}
+
+	
 	public void create_RealEstate(String project_name) {
 		try {
 			RepositoryConnection con_update;
@@ -105,31 +193,57 @@ public class MarmottaSparql {
 			e.printStackTrace();
 		}
 	}
-	
-	public void attach_dataset(String project_name,String dataset_name) {
+
+	public void create_Model(String model_name) {
 		try {
 			RepositoryConnection con_update;
 			con_update = repository_update.getConnection();
 			con_update.begin(); // start the transaction			
-			URI project = f.createURI(base, project_name);
-			URI dataset = f.createURI(base, dataset_name);
-			con_update.add(project, realEstate_dataset_property, dataset);
-			con_update.add(dataset, RDF.TYPE, void_dataset_class);
+			URI dataset = f.createURI(base, model_name);
+			con_update.add(dataset, RDF.TYPE, model_class);
 			con_update.commit();
 		} catch (RepositoryException e) {
 			e.printStackTrace();
 		}
 	}
 
-	public void detatch_dataset(String project_name,String dataset_name) {
+	public void remove_model(String model_name) {
 		try {
 			RepositoryConnection con_update;
 			con_update = repository_update.getConnection();
 			con_update.begin(); // start the transaction			
-			URI project = f.createURI(base, project_name);
-			URI dataset = f.createURI(base, dataset_name);
-			con_update.remove(project, realEstate_dataset_property, dataset);
-			con_update.remove(dataset, RDF.TYPE, void_dataset_class);
+			URI dataset = f.createURI(base, model_name);
+			con_update.remove(dataset, RDF.TYPE, model_class);
+			con_update.commit();
+		} catch (RepositoryException e) {
+			e.printStackTrace();
+		}
+	}
+
+	
+	
+	public void attach_model(String realEstate_name,String model_name) {
+		try {
+			RepositoryConnection con_update;
+			con_update = repository_update.getConnection();
+			con_update.begin(); // start the transaction			
+			URI project = f.createURI(base, realEstate_name);
+			URI model = f.createURI(base, model_name);
+			con_update.add(project, realEstate_model_property, model);
+			con_update.commit();
+		} catch (RepositoryException e) {
+			e.printStackTrace();
+		}
+	}
+
+	public void detatch_model(String realEstate_name,String model_name) {
+		try {
+			RepositoryConnection con_update;
+			con_update = repository_update.getConnection();
+			con_update.begin(); // start the transaction			
+			URI project = f.createURI(base, realEstate_name);
+			URI model = f.createURI(base, model_name);
+			con_update.remove(project, realEstate_model_property, model);
 			con_update.commit();
 		} catch (RepositoryException e) {
 			e.printStackTrace();
@@ -138,11 +252,24 @@ public class MarmottaSparql {
 
 	public static void main(String[] args) {
 		MarmottaSparql m = new MarmottaSparql();
+		/*System.out.println("1");
+		m.create_RealEstate("real1");
+		m.attach_model("real1", "model1");
+		System.out.println("2");
+		m.getRealEstateModels();
+		System.out.println("3");
+		m.remove_RealEstate("real1");
+		m.detatch_model("real1", "model1");
 		System.out.println(m.getrealEstates());
+		m.getRealEstateModels();*/
+		
+		m.getRealEstateModelsSimplified();
+		//System.out.println(m.getModels());
+		/*System.out.println(m.getrealEstates());
 		m.create_RealEstate("testi");
 		System.out.println(m.getrealEstates());
 		m.remove_RealEstate("testi");
-		System.out.println(m.getrealEstates());
+		System.out.println(m.getrealEstates());*/
 	}
 
 }
