@@ -1,6 +1,10 @@
 package fi.ni.drumbeatinterface;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -13,8 +17,12 @@ import com.vaadin.data.Item;
 import com.vaadin.data.Property.ValueChangeEvent;
 import com.vaadin.data.Property.ValueChangeListener;
 import com.vaadin.server.ExternalResource;
+import com.vaadin.server.FileDownloader;
 import com.vaadin.server.FileResource;
+import com.vaadin.server.StreamResource;
+import com.vaadin.server.StreamResource.StreamSource;
 import com.vaadin.server.VaadinRequest;
+import com.vaadin.server.VaadinResponse;
 import com.vaadin.server.VaadinService;
 import com.vaadin.server.VaadinServlet;
 import com.vaadin.ui.BrowserFrame;
@@ -23,8 +31,10 @@ import com.vaadin.ui.HorizontalLayout;
 import com.vaadin.ui.Image;
 import com.vaadin.ui.OptionGroup;
 import com.vaadin.ui.Panel;
+import com.vaadin.ui.RichTextArea;
 import com.vaadin.ui.TabSheet;
 import com.vaadin.ui.Table;
+import com.vaadin.ui.TextArea;
 import com.vaadin.ui.TextField;
 import com.vaadin.ui.Tree;
 import com.vaadin.ui.UI;
@@ -80,7 +90,7 @@ public class DrumbeatinterfaceUI extends UI {
 			uploads);
 	TabSheet tabsheet = new TabSheet();
 	final Table files_table = new Table("Uploaded files");
-	final Table contexts_table = new Table("contexts list");
+	final Table contexts_table = new Table("Contexts list");
 	final Table bim_projects_table = new Table(
 			"as seen by drumcsbeat@gmail.com");
 	final public OptionGroup converter_selection = new OptionGroup(
@@ -93,7 +103,10 @@ public class DrumbeatinterfaceUI extends UI {
 			"Attach the model to a real estate");
 	// A map for project selections
 	Map<Integer, Long> bim_projects = new HashMap<Integer, Long>();
+	final TextArea sparql_query_area = new TextArea("");
+	final RichTextArea sparql_result_rtarea = new RichTextArea();
 
+	
 	@Override
 	protected void init(VaadinRequest request) {
 		String basepath = VaadinService.getCurrent().getBaseDirectory()
@@ -255,8 +268,39 @@ public class DrumbeatinterfaceUI extends UI {
 
 		// ========= MARMOTTA ====================
 		VerticalLayout tab_marmotta = new VerticalLayout();
-		tab_marmotta.setCaption("Marmotta graphs");
+		tab_marmotta.setCaption("Marmotta");
 		tabsheet.addTab(tab_marmotta);
+		Panel p_sparql = new Panel("Sparql query");
+		p_sparql.setWidth("900");		
+		VerticalLayout sparql_layout = new VerticalLayout();
+		sparql_layout.addComponent(sparql_query_area);
+		sparql_query_area.setValue("PREFIX drumbeat:   <http://drumbeat.cs.hut.fi/tomcat/marmotta/resource/> \nPREFIX rdf:   <http://www.w3.org/1999/02/22-rdf-syntax-ns#> \nselect $s \nwhere\n{\n?s rdf:type drumbeat:RealEstate .\n}\n LIMIT 100");
+		Button sparql_button = new Button("Query",
+				new Button.ClickListener() {
+					@Override
+					public void buttonClick(Button.ClickEvent event) {
+						 sparql_result_rtarea.setValue(marmotta.httpGetQuery2html(sparql_query_area.getValue()));
+					}
+				});
+		
+		Button sparql_button_json = new Button("Query and download JSON");
+		
+		OnDemandFileDownloader  jsonDownloader = new  OnDemandFileDownloader(createOnDemandJSOnResource());
+	    jsonDownloader.extend(sparql_button_json);
+	     
+		HorizontalLayout hor_sparql_buttons = new HorizontalLayout();
+		hor_sparql_buttons.addComponent(sparql_button);
+		hor_sparql_buttons.addComponent(sparql_button_json);
+		sparql_layout.addComponent(hor_sparql_buttons);
+		sparql_layout.addComponent(sparql_result_rtarea);
+		//sparql_result_rtarea.setReadOnly(true);
+		sparql_query_area.setWidth("800");
+		sparql_query_area.setHeight("400");
+		sparql_result_rtarea.setWidth("800");
+		p_sparql.setContent(sparql_layout);
+		
+		tab_marmotta.addComponent(p_sparql);
+		
 		contexts_table.addContainerProperty("Graph", String.class, null);
 		contexts_table.addContainerProperty("Size", Long.class, null);
 		tab_marmotta.addComponent(contexts_table);
@@ -274,6 +318,57 @@ public class DrumbeatinterfaceUI extends UI {
 
 		updateData();
 		listRealEstates();
+	}
+
+	private OnDemandStreamResource createOnDemandJSOnResource() {
+		return new OnDemandStreamResource() {
+
+			public InputStream getStream() {
+				ByteArrayOutputStream bos = new ByteArrayOutputStream();
+				String result = marmotta.httpGetQuery2json(sparql_query_area
+						.getValue());
+				try {
+					bos.write(result.getBytes());
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
+				return new ByteArrayInputStream(bos.toByteArray());
+			}
+			@Override
+			public String getFilename() {
+				return "output.srj";
+			}
+		};
+	}
+
+	public interface OnDemandStreamResource extends StreamSource {
+		String getFilename();
+	}
+
+	class OnDemandFileDownloader extends FileDownloader {
+
+		private static final long serialVersionUID = 1L;
+
+		private final OnDemandStreamResource onDemandStreamResource;
+
+	
+		public OnDemandFileDownloader(OnDemandStreamResource onDemandStreamResource) {
+			super(new StreamResource(onDemandStreamResource, ""));
+			this.onDemandStreamResource = onDemandStreamResource;
+		}
+		
+		 @Override
+		  public boolean handleConnectorRequest (VaadinRequest request, VaadinResponse response, String path)
+		      throws IOException {
+		    getResource().setFilename(onDemandStreamResource.getFilename());
+		    return super.handleConnectorRequest(request, response, path);
+		  }
+
+		private StreamResource getResource() {
+			 StreamResource resource = new StreamResource(createOnDemandJSOnResource(),"output.srj");
+			return (StreamResource) resource ; // on the fl
+		}
+
 	}
 
 	public void createModel(String model_name) {

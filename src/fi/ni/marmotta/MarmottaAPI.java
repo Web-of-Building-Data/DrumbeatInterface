@@ -1,6 +1,8 @@
 package fi.ni.marmotta;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
 import java.util.ArrayList;
@@ -48,7 +50,8 @@ SOFTWARE.
 public class MarmottaAPI {
 	final String context_url = "http://drumbeat.cs.hut.fi/tomcat/marmotta/context/list?labels=true";
 	final String sparql_url_header = "http://drumbeat.cs.hut.fi/tomcat/marmotta/sparql/select?query=";
-	final String sparql_url_tail = "&output=json";
+	final String sparql_url_json_tail = "&output=json";
+	final String sparql_url_html_tail = "&output=html";
 	final String realEstateClass = "http://drumbeat.cs.hut.fi/tomcat/marmotta/resource/RealEstate";
 	final String modelClass = "http://drumbeat.cs.hut.fi/tomcat/marmotta/resource/Model";
 	final String modelProperty = "http://drumbeat.cs.hut.fi/tomcat/marmotta/resource/model";
@@ -118,7 +121,7 @@ public class MarmottaAPI {
 		String queryStr= "select $s where {?s <" + RDF.TYPE + "> <"+realEstateClass + ">} LIMIT 100";
 		String url=null;
 		try {
-			url=sparql_url_header+URLEncoder.encode(queryStr, "UTF-8")+sparql_url_tail;
+			url=sparql_url_header+URLEncoder.encode(queryStr, "UTF-8")+sparql_url_json_tail;
 		} catch (UnsupportedEncodingException e) {
 			e.printStackTrace();
 		}
@@ -172,7 +175,7 @@ public class MarmottaAPI {
 		String queryStr= "select $s where {?s <" + RDF.TYPE + "> <"+modelClass + ">} LIMIT 100";
 		String url=null;
 		try {
-			url=sparql_url_header+URLEncoder.encode(queryStr, "UTF-8")+sparql_url_tail;
+			url=sparql_url_header+URLEncoder.encode(queryStr, "UTF-8")+sparql_url_json_tail;
 		} catch (UnsupportedEncodingException e) {
 			e.printStackTrace();
 		}
@@ -225,7 +228,7 @@ public class MarmottaAPI {
 		String queryStr="select $s $o where {?s <" + RDF.TYPE + "> <"+ realEstateClass + ">. ?s <" + modelProperty + "> ?o.} LIMIT 100";
 		String url=null;
 		try {
-			url=sparql_url_header+URLEncoder.encode(queryStr, "UTF-8")+sparql_url_tail;
+			url=sparql_url_header+URLEncoder.encode(queryStr, "UTF-8")+sparql_url_json_tail;
 		} catch (UnsupportedEncodingException e) {
 			e.printStackTrace();
 		}
@@ -279,6 +282,63 @@ public class MarmottaAPI {
 		}
 
 		return ret;
+	}
+
+	
+	public String httpGetQuery2html(String queryStr) {
+		String url=null;
+		try {
+			url=sparql_url_header+URLEncoder.encode(queryStr, "UTF-8")+sparql_url_html_tail;
+		} catch (UnsupportedEncodingException e) {
+			e.printStackTrace();
+		}
+		try (CloseableHttpClient httpClient = HttpClientBuilder.create()
+				.build()) {
+			HttpGet request = new HttpGet(url);
+			HttpResponse http_result = httpClient.execute(request);
+			BufferedReader rd = new BufferedReader(
+					new InputStreamReader(http_result.getEntity().getContent()));
+			 
+				StringBuffer result = new StringBuffer();
+				String line = "";
+				while ((line = rd.readLine()) != null) {
+					result.append(line);
+				}
+				return result.toString();
+
+		} catch (IOException ex) {
+			ex.printStackTrace();
+		}
+
+		return null;
+	}
+	
+	public String httpGetQuery2json(String queryStr) {
+		String url=null;
+		try {
+			url=sparql_url_header+URLEncoder.encode(queryStr, "UTF-8")+sparql_url_json_tail;
+		} catch (UnsupportedEncodingException e) {
+			e.printStackTrace();
+		}
+		try (CloseableHttpClient httpClient = HttpClientBuilder.create()
+				.build()) {
+			HttpGet request = new HttpGet(url);
+			HttpResponse http_result = httpClient.execute(request);
+			BufferedReader rd = new BufferedReader(
+					new InputStreamReader(http_result.getEntity().getContent()));
+			 
+				StringBuffer result = new StringBuffer();
+				String line = "";
+				while ((line = rd.readLine()) != null) {
+					result.append(line);
+				}
+				return result.toString();
+
+		} catch (IOException ex) {
+			ex.printStackTrace();
+		}
+
+		return null;
 	}
 	
 }
