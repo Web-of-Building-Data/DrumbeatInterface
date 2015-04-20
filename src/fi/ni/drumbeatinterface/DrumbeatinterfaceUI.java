@@ -107,7 +107,7 @@ public class DrumbeatinterfaceUI extends UI {
 	// The field for inserting a new real estate
 	final TextField site_textField = new TextField();
 	final Tree sites_tree = new Tree("Sites and connected models");
-	
+	final Map<String,TreeNode> treenodes = new HashMap<String,TreeNode>();
 	
 	final Tree models_tree = new Tree("Models that have a description");
 	
@@ -211,15 +211,13 @@ public class DrumbeatinterfaceUI extends UI {
 					@Override
 					public void buttonClick(Button.ClickEvent event) {
 						
-						String realEstate_name = (String) sites_tree
-								.getValue();
-						if (realEstate_name != null
-								&& realEstate_name.length() > 0) {
+						TreeNode realEstate = (TreeNode) sites_tree.getValue();
+						if (realEstate != null) {
 							//Only real estates
-							Object parent=sites_tree.getParent(realEstate_name);
+							Object parent=sites_tree.getParent(realEstate);
 							if(parent==null)
 							{
-							   marmotta_sparql.remove_RealEstate(realEstate_name);
+							   marmotta_sparql.remove_RealEstate(realEstate.getInternal_name());
 							   listRealEstates();
 							}
 						}
@@ -621,11 +619,14 @@ public class DrumbeatinterfaceUI extends UI {
 
 	public void listRealEstates() {
 		sites_tree.removeAllItems();
+		treenodes.clear();
 		realEstates_tree_4upload.removeAllItems();
 		List<String> realEstate_names = marmotta.httpGetDRUMRealEstates();
 		boolean used = false;
 		for (String name : realEstate_names) {
-			sites_tree.addItem(name);
+			TreeNode re=new TreeNode(name,name);
+			treenodes.put(name, re);
+			sites_tree.addItem(re);
 			realEstates_tree_4upload.addItem(name);
 			if (!used) {
 				realEstates_tree_4upload.setValue(name); // The default value
@@ -635,10 +636,13 @@ public class DrumbeatinterfaceUI extends UI {
 		
 		List<Pair> models=marmotta.httpGetRealEstateModels();		
 		for (Pair pair : models) {
-			System.out.println("s "+pair.getS1());
-			System.out.println("o "+pair.getS2());
-			sites_tree.addItem(pair.getS2());
-			sites_tree.setParent(pair.getS2(), pair.getS1());
+			TreeNode re=treenodes.get(pair.getS1());
+			if(re!=null)
+			{
+			  TreeNode mo=new TreeNode(pair.getS1()+"."+pair.getS2(),pair.getS2());	
+			  sites_tree.addItem(mo);
+			  sites_tree.setParent(mo, re);
+			}
 		}
 	}
 
