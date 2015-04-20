@@ -1,8 +1,6 @@
 package fi.ni.marmotta;
 
 import java.util.ArrayList;
-
-
 import java.util.List;
 
 import org.openrdf.model.URI;
@@ -17,6 +15,8 @@ import org.openrdf.query.TupleQueryResult;
 import org.openrdf.repository.RepositoryConnection;
 import org.openrdf.repository.RepositoryException;
 import org.openrdf.repository.sparql.SPARQLRepository;
+
+import fi.ni.marmotta.vo.Pair;
 
 /*
  * The MIT License (MIT)
@@ -54,6 +54,8 @@ public class MarmottaSparql {
 	URI realEstate_class=null;
 	URI model_class=null;
 	URI realEstate_model_property=null;
+	URI implements_property=null;
+	
 	public MarmottaSparql() {
 		repository_query = new SPARQLRepository(
 				"http://drumbeat.cs.hut.fi/tomcat/marmotta/sparql/select");
@@ -67,6 +69,8 @@ public class MarmottaSparql {
 			model_class = f.createURI(base,"Model");
 			realEstate_class = f.createURI(base, "RealEstate");
 			realEstate_model_property = f.createURI(base, "model");
+			
+			implements_property = f.createURI("http://drumbeat.cs.hut.fi/owl/IFC2X3_Standard#", "implements");
 		} catch (RepositoryException e) {
 			e.printStackTrace();
 		}
@@ -80,7 +84,7 @@ public class MarmottaSparql {
 	// Complains about the output format: no result format specified or unsupported result format
 	// At a separate test, this works OK
 	
-	public List<String> getrealEstates() {
+	public List<String> getSites() {
 		List<String> ret=new ArrayList<String>();
 		try {
 			RepositoryConnection con_query;
@@ -275,6 +279,42 @@ public class MarmottaSparql {
 		}
 	}
 
+	public void add_linkset2Model(List<Pair> links) {
+		try {
+			RepositoryConnection con_update;
+			con_update = repository_update.getConnection();
+			con_update.begin(); // start the transaction
+			for(Pair p:links)
+			{
+			 URI from = f.createURI(p.getS1());
+			 URI to = f.createURI(p.getS2());
+			 con_update.add(from, implements_property, to);
+			}
+			con_update.commit();
+		} catch (RepositoryException e) {
+			e.printStackTrace();
+		}
+	}
+
+	public void remove_linksetFromModel(List<Pair> links) {
+		try {
+			RepositoryConnection con_update;
+			con_update = repository_update.getConnection();
+			con_update.begin(); // start the transaction
+			for(Pair p:links)
+			{
+			 URI from = f.createURI(p.getS1());
+			 URI to = f.createURI(p.getS2());
+			 con_update.remove(from, implements_property, to);
+			}
+			con_update.commit();
+		} catch (RepositoryException e) {
+			e.printStackTrace();
+		}
+	}
+
+	
+	
 	public static void main(String[] args) {
 		MarmottaSparql m = new MarmottaSparql();
 		/*System.out.println("1");

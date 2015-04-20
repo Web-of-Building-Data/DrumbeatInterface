@@ -5,15 +5,20 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URLEncoder;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 import javax.servlet.annotation.WebServlet;
 
+import softhema.system.toolkits.ToolkitString;
+
 import com.vaadin.annotations.Theme;
 import com.vaadin.annotations.VaadinServletConfiguration;
 import com.vaadin.data.Item;
+import com.vaadin.data.Property;
 import com.vaadin.data.Property.ValueChangeEvent;
 import com.vaadin.data.Property.ValueChangeListener;
 import com.vaadin.server.ExternalResource;
@@ -27,8 +32,10 @@ import com.vaadin.server.VaadinService;
 import com.vaadin.server.VaadinServlet;
 import com.vaadin.ui.BrowserFrame;
 import com.vaadin.ui.Button;
+import com.vaadin.ui.ComboBox;
 import com.vaadin.ui.HorizontalLayout;
 import com.vaadin.ui.Image;
+import com.vaadin.ui.Link;
 import com.vaadin.ui.OptionGroup;
 import com.vaadin.ui.Panel;
 import com.vaadin.ui.RichTextArea;
@@ -90,23 +97,88 @@ public class DrumbeatinterfaceUI extends UI {
 			uploads);
 	TabSheet tabsheet = new TabSheet();
 	final Table files_table = new Table("Uploaded files");
-	final Table contexts_table = new Table("Contexts list");
+	final Table contexts_table = new Table("Marmotta Contexts list");
 	final Table bim_projects_table = new Table(
-			"as seen by drumcsbeat@gmail.com");
+			"Click the model to see the BIMServer view of the mdoel.");
 	final public OptionGroup converter_selection = new OptionGroup(
 			"Optionally an IFC to RDF converter can be selected");
 	final TextField url_textField = new TextField();
-	final TextField realEstate_textField = new TextField();
-	final Tree realEstates_tree = new Tree("Real estates and connected models");
+	
+	// The field for inserting a new real estate
+	final TextField site_textField = new TextField();
+	final Tree sites_tree = new Tree("Sites and connected models");
+	
+	
 	final Tree models_tree = new Tree("Models that have a description");
-	final Tree realEstates_tree_4upload = new Tree(
-			"Attach the model to a real estate");
+	
+	// Model Import Real estates list
+	final Tree realEstates_tree_4upload = new Tree("Attach the model to a site");
+	
 	// A map for project selections
 	Map<Integer, Long> bim_projects = new HashMap<Integer, Long>();
 	final TextArea sparql_query_area = new TextArea("");
 	final RichTextArea sparql_result_rtarea = new RichTextArea();
+	final Table links_table = new Table("Links statements (Generation may take some time.)");
 
+	final String query_realEstates="PREFIX drumbeat:   <http://drumbeat.cs.hut.fi/tomcat/marmotta/resource/> \nPREFIX rdf:   <http://www.w3.org/1999/02/22-rdf-syntax-ns#> \nselect $s \nwhere\n{\n?s rdf:type drumbeat:RealEstate .\n}\n LIMIT 100";
+	final String query_structural_links=""
+			+"prefix rdfs:  <http://www.w3.org/2000/01/rdf-schema#>"
+            +"\nprefix model: <http://drumbeat.cs.hut.fi/tomcat/marmotta/resource/>"
+            +"\nprefix owl:   <http://www.w3.org/2002/07/owl#>"
+            +"\nprefix xsd:   <http://www.w3.org/2001/XMLSchema#>"
+            +"\nprefix rdf:   <http://www.w3.org/1999/02/22-rdf-syntax-ns#>"
+            +"\nprefix ifc:   <http://drumbeat.cs.hut.fi/owl/IFC2X3_Standard#>"
+            +"\n"
+            +"\nselect ?se ?ae"            
+            +"\nFROM <http://drumbeat.cs.hut.fi/tomcat/marmotta/context/Structural>"
+            +"\nWHERE {"
+            +"\n?se ifc:hasProperties [ ifc:name \"initial_GUID\"^^xsd:string  ;"
+            +"\n              ifc:nominalValue [ rdf:value ?a ]]."
+            +"\nBIND (URI(CONCAT(\"http://drumbeat.cs.hut.fi/tomcat/marmotta/resource/GUID_\", ?a))"
+            +"\nAS ?ae)"
+            +"\n}";
 	
+	final String query_template_links=""
+			+"prefix rdfs:  <http://www.w3.org/2000/01/rdf-schema#>"
+            +"\nprefix model: <http://drumbeat.cs.hut.fi/tomcat/marmotta/resource/>"
+            +"\nprefix owl:   <http://www.w3.org/2002/07/owl#>"
+            +"\nprefix xsd:   <http://www.w3.org/2001/XMLSchema#>"
+            +"\nprefix rdf:   <http://www.w3.org/1999/02/22-rdf-syntax-ns#>"
+            +"\nprefix ifc:   <http://drumbeat.cs.hut.fi/owl/IFC2X3_Standard#>"
+            +"\n"
+            +"\nselect ?from ?to"            
+            +"\nFROM <context>"
+            +"\nWHERE {"
+            +"\n?from ifc:hasProperties [ ifc:name \"initial_GUID\"^^xsd:string  ;"
+            +"\n              ifc:nominalValue [ rdf:value ?a ]]."
+            +"\nBIND (URI(CONCAT(\"http://drumbeat.cs.hut.fi/tomcat/marmotta/resource/GUID_\", ?a))"
+            +"\nAS ?to)"
+            +"\n}";
+	
+	final String query_structural_project=""
+			+"prefix rdf:   <http://www.w3.org/1999/02/22-rdf-syntax-ns#>"
+			+"\nprefix ifc:   <http://drumbeat.cs.hut.fi/owl/IFC2X3_Standard#>"
+			+"\n"
+			+"\nselect ?s ?name"
+			+"\nFROM <http://drumbeat.cs.hut.fi/tomcat/marmotta/context/Structural>"
+			+"\nWHERE {"
+			+"\n?s rdf:type ifc:IfcProject."
+			+"\n?s ifc:name ?name ."
+			+"\n}";
+			
+	final String query_implemens =""
+			+"prefix rdf:   <http://www.w3.org/1999/02/22-rdf-syntax-ns#>"
+			+"\nprefix ifc:   <http://drumbeat.cs.hut.fi/owl/IFC2X3_Standard#>"
+			+"\n"
+			+"\nselect ?s ?o"
+			+"\nWHERE {"
+			+"\n?s ifc:implements ?o ."
+			+"\n} LIMIT 10";
+
+		
+	
+	final ComboBox contexts_selection = new ComboBox("Select a context");
+	final List<Pair> generated_links=new ArrayList<Pair>();
 	@Override
 	protected void init(VaadinRequest request) {
 		String basepath = VaadinService.getCurrent().getBaseDirectory()
@@ -128,23 +200,23 @@ public class DrumbeatinterfaceUI extends UI {
 		// ========= REAL ESTATES ====================
 
 		VerticalLayout tab_realEstate = new VerticalLayout();
-		tab_realEstate.setCaption("Real Estates");
+		tab_realEstate.setCaption("Sites");
 		tabsheet.addTab(tab_realEstate);
 
-		Panel p_project = new Panel("Create a new real estate");
+		Panel p_project = new Panel("Create a sites");
 		p_project.setWidth("400");
-		tab_realEstate.addComponent(realEstates_tree);
+		tab_realEstate.addComponent(sites_tree);
 		Button removeRealEstate_button = new Button(
-				"Remove the selected real estate", new Button.ClickListener() {
+				"Remove the selected site", new Button.ClickListener() {
 					@Override
 					public void buttonClick(Button.ClickEvent event) {
 						
-						String realEstate_name = (String) realEstates_tree
+						String realEstate_name = (String) sites_tree
 								.getValue();
 						if (realEstate_name != null
 								&& realEstate_name.length() > 0) {
 							//Only real estates
-							Object parent=realEstates_tree.getParent(realEstate_name);
+							Object parent=sites_tree.getParent(realEstate_name);
 							if(parent==null)
 							{
 							   marmotta_sparql.remove_RealEstate(realEstate_name);
@@ -156,12 +228,12 @@ public class DrumbeatinterfaceUI extends UI {
 		tab_realEstate.addComponent(removeRealEstate_button);
 		tab_realEstate.addComponent(p_project);
 
-		realEstate_textField.setImmediate(true);
+		site_textField.setImmediate(true);
 		Button newRealEstate_button = new Button("Create",
 				new Button.ClickListener() {
 					@Override
 					public void buttonClick(Button.ClickEvent event) {
-						String realEstate_name = realEstate_textField
+						String realEstate_name = site_textField
 								.getValue();
 						if (realEstate_name != null
 								&& realEstate_name.length() > 0) {
@@ -172,7 +244,7 @@ public class DrumbeatinterfaceUI extends UI {
 				});
 		HorizontalLayout newproject_layout = new HorizontalLayout();
 		newproject_layout.setSizeUndefined();
-		newproject_layout.addComponent(realEstate_textField);
+		newproject_layout.addComponent(site_textField);
 		newproject_layout.addComponent(newRealEstate_button);
 		newproject_layout.setSpacing(true);
 		p_project.setContent(newproject_layout);
@@ -182,6 +254,9 @@ public class DrumbeatinterfaceUI extends UI {
 		tab_models.setCaption("Models");
 		tabsheet.addTab(tab_models);
 		tab_models.addComponent(models_tree);
+		Link void_link = new Link("Void description of the models",
+		        new ExternalResource("http://drumbeat.cs.hut.fi/void.ttl"));
+		tab_models.addComponent(void_link);
 		Panel p_model = new Panel("Upload and convert an IFC file");
 		p_model.setWidth("900");
 		tab_models.addComponent(p_model);
@@ -236,15 +311,7 @@ public class DrumbeatinterfaceUI extends UI {
 		url_upload.setSpacing(true);
 		p_model_url.setContent(url_upload);
 
-		files_table.addContainerProperty("File name", String.class, null);
-		listIFCFiles();
-		tab_models.addComponent(files_table);
-
-		// ========= BIMSERVER ====================
-		VerticalLayout tab_bimserver = new VerticalLayout();
-		tab_bimserver.setCaption("BIMServer projects");
-		tabsheet.addTab(tab_bimserver);
-
+		
 		// Define two columns for the built-in container
 		bim_projects_table.addContainerProperty("Name", String.class, null);
 		bim_projects_table.addContainerProperty("Created", String.class, null);
@@ -263,18 +330,48 @@ public class DrumbeatinterfaceUI extends UI {
 				}
 			}
 		});
-		tab_bimserver.addComponent(bim_projects_table);
-		tab_bimserver.addComponent(project_browser);
+		tab_models.addComponent(bim_projects_table);
+		tab_models.addComponent(project_browser);
 
-		// ========= MARMOTTA ====================
-		VerticalLayout tab_marmotta = new VerticalLayout();
-		tab_marmotta.setCaption("Marmotta");
-		tabsheet.addTab(tab_marmotta);
+		
+		// ========= Queries ====================
+		VerticalLayout tab_queries = new VerticalLayout();
+		tab_queries.setCaption("Queries");
+		tabsheet.addTab(tab_queries);
 		Panel p_sparql = new Panel("Sparql query");
 		p_sparql.setWidth("900");		
 		VerticalLayout sparql_layout = new VerticalLayout();
+		final ComboBox queries = new ComboBox("Select a query");
+		queries.setInvalidAllowed(false);
+		queries.setNullSelectionAllowed(false);
+		queries.setNewItemsAllowed(false);
+		queries.addItem("Sites");
+		queries.setValue("Sites");
+		queries.addItem("Structural model links");
+		queries.addItem("Project name");
+		queries.addItem("List implements links");
+		queries.setWidth("400");
+		queries.addListener(new Property.ValueChangeListener() {
+	            private static final long serialVersionUID = -5188369735622627751L;
+
+	            public void valueChange(ValueChangeEvent event) {
+	                if (queries.getValue() != null) {
+	                	if(queries.getValue().equals("Sites"))
+	                		sparql_query_area.setValue(query_realEstates);
+	                	if(queries.getValue().equals("Structural model links"))
+	                		sparql_query_area.setValue(query_structural_links);
+	                	if(queries.getValue().equals("Project name"))
+	                		sparql_query_area.setValue(query_structural_project);
+	                	if(queries.getValue().equals("List implements links"))
+	                		sparql_query_area.setValue(query_implemens);
+	                }
+	            }
+	        });
+		
+		sparql_layout.addComponent(queries);
 		sparql_layout.addComponent(sparql_query_area);
-		sparql_query_area.setValue("PREFIX drumbeat:   <http://drumbeat.cs.hut.fi/tomcat/marmotta/resource/> \nPREFIX rdf:   <http://www.w3.org/1999/02/22-rdf-syntax-ns#> \nselect $s \nwhere\n{\n?s rdf:type drumbeat:RealEstate .\n}\n LIMIT 100");
+		sparql_query_area.setValue(query_realEstates);
+				
 		Button sparql_button = new Button("Query",
 				new Button.ClickListener() {
 					@Override
@@ -283,44 +380,137 @@ public class DrumbeatinterfaceUI extends UI {
 					}
 				});
 		
-		Button sparql_button_json = new Button("Query and download JSON");
-		
-		OnDemandFileDownloader  jsonDownloader = new  OnDemandFileDownloader(createOnDemandJSOnResource());
+		Button sparql_button_json = new Button("Query and download JSON");		
+		OnDemandFileDownloader  jsonDownloader = new  OnDemandFileDownloader(createOnDemandJSON_Resource(),"JSON");
 	    jsonDownloader.extend(sparql_button_json);
-	     
+
+		Button sparql_button_xml = new Button("Query and download XML");		
+		OnDemandFileDownloader  xmlDownloader = new  OnDemandFileDownloader(createOnDemandXMLResource(),"XML");
+	    xmlDownloader.extend(sparql_button_xml);
+
+	    
 		HorizontalLayout hor_sparql_buttons = new HorizontalLayout();
 		hor_sparql_buttons.addComponent(sparql_button);
 		hor_sparql_buttons.addComponent(sparql_button_json);
+		hor_sparql_buttons.addComponent(sparql_button_xml);
 		sparql_layout.addComponent(hor_sparql_buttons);
 		sparql_layout.addComponent(sparql_result_rtarea);
-		//sparql_result_rtarea.setReadOnly(true);
 		sparql_query_area.setWidth("800");
 		sparql_query_area.setHeight("400");
 		sparql_result_rtarea.setWidth("800");
 		p_sparql.setContent(sparql_layout);
 		
-		tab_marmotta.addComponent(p_sparql);
+		tab_queries.addComponent(p_sparql);
 		
-		contexts_table.addContainerProperty("Graph", String.class, null);
-		contexts_table.addContainerProperty("Size", Long.class, null);
-		tab_marmotta.addComponent(contexts_table);
+		// ========= Links ====================
+		VerticalLayout tab_links = new VerticalLayout();
+		tab_links.setCaption("Links");
+		tabsheet.addTab(tab_links);
 
-		// ========= INTERNAL ====================
-		VerticalLayout tab_home = new VerticalLayout();
-		tab_home.setCaption("Internal");
-		tabsheet.addTab(tab_home);
+		Panel p_links = new Panel("Implements query");
+		p_links.setWidth("900");		
+		VerticalLayout links_layout = new VerticalLayout();
+		contexts_selection.setInvalidAllowed(false);
+		contexts_selection.setNullSelectionAllowed(false);
+		contexts_selection.setNewItemsAllowed(false);
+		contexts_selection.setWidth("800");
+		
+		links_layout.addComponent(contexts_selection);		
+		
+				
+		Button links_button = new Button("List links",
+				new Button.ClickListener() {
+					@Override
+					public void buttonClick(Button.ClickEvent event) {
+						if(contexts_selection.getValue()!=null && contexts_selection.getValue().toString().length()>0)
+						{
+						 String query=ToolkitString.strReplaceLike(query_template_links, "<context>", "<"+contexts_selection.getValue()+">");
+						 List<Pair> links=marmotta.httpGetLinks(query);
+						 links_table.removeAllItems();
+						 generated_links.clear();
+						 for(Pair p:links)
+						 {
+							 Object newItemId = links_table.addItem();
+							 Item row = links_table.getItem(newItemId);
+							 String short_from=ToolkitString.strReplaceLike(p.getS1(), "http://drumbeat.cs.hut.fi/tomcat/marmotta/resource/", "resourse:");
+							 String short_to=ToolkitString.strReplaceLike(p.getS2(), "http://drumbeat.cs.hut.fi/tomcat/marmotta/resource/", "resourse:");
+							 row.getItemProperty("From").setValue(short_from);
+							 row.getItemProperty("property").setValue("ifc:implements");
+							 row.getItemProperty("To").setValue(short_to);
+                             generated_links.add(p);
+						 }
+						}
+					}
+				});
+		
+	    
+		links_layout.addComponent(links_button);
+		
+		links_table.addContainerProperty("From", String.class, null);
+		links_table.addContainerProperty("property", String.class, null);
+		links_table.addContainerProperty("To", String.class, null);
+		links_table.setSelectable(false);
+		
+		
+		links_layout.addComponent(links_table);
+		links_table.setWidth("800");
+		
+		
+		Button insert_links_button = new Button("Insert links to the RDF Store",
+				new Button.ClickListener() {
+					@Override
+					public void buttonClick(Button.ClickEvent event) {						
+						marmotta_sparql.add_linkset2Model(generated_links);
+					}
+				});
+		
+		Button remove_links_button = new Button("Remove links from the RDF Store",
+				new Button.ClickListener() {
+					@Override
+					public void buttonClick(Button.ClickEvent event) {						
+						marmotta_sparql.remove_linksetFromModel(generated_links);
+					}
+				});
+		
+		
+		HorizontalLayout hor_links_buttons = new HorizontalLayout();
+		hor_links_buttons.addComponent(insert_links_button);
+		hor_links_buttons.addComponent(remove_links_button);
+		
+		links_layout.addComponent(hor_links_buttons);
+		p_links.setContent(links_layout);
+		
+		tab_links.addComponent(p_links);
+
+		
+		
+		// ========= Resources ====================
+		VerticalLayout tab_internaldata = new VerticalLayout();
+		tab_internaldata.setCaption("Internal resources");
+		tabsheet.addTab(tab_internaldata);
+
 
 		BrowserFrame browser = new BrowserFrame("", new ExternalResource(
 				"http://drumbeat.cs.hut.fi/home.html"));
 		browser.setWidth("1200px");
 		browser.setHeight("800px");
-		tab_home.addComponent(browser);
+		tab_internaldata.addComponent(browser);
+
+		files_table.addContainerProperty("File name", String.class, null);
+		listIFCFiles();
+		tab_internaldata.addComponent(files_table);
+
+
+		contexts_table.addContainerProperty("Graph", String.class, null);
+		contexts_table.addContainerProperty("Size", Long.class, null);
+		tab_internaldata.addComponent(contexts_table);
+
 
 		updateData();
 		listRealEstates();
 	}
 
-	private OnDemandStreamResource createOnDemandJSOnResource() {
+	private OnDemandStreamResource createOnDemandJSON_Resource() {
 		return new OnDemandStreamResource() {
 
 			public InputStream getStream() {
@@ -341,6 +531,27 @@ public class DrumbeatinterfaceUI extends UI {
 		};
 	}
 
+	private OnDemandStreamResource createOnDemandXMLResource() {
+		return new OnDemandStreamResource() {
+
+			public InputStream getStream() {
+				ByteArrayOutputStream bos = new ByteArrayOutputStream();
+				String result = marmotta.httpGetQuery2XML(sparql_query_area
+						.getValue());
+				try {
+					bos.write(result.getBytes());
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
+				return new ByteArrayInputStream(bos.toByteArray());
+			}
+			@Override
+			public String getFilename() {
+				return "output.srj";
+			}
+		};
+	}
+	
 	public interface OnDemandStreamResource extends StreamSource {
 		String getFilename();
 	}
@@ -350,11 +561,13 @@ public class DrumbeatinterfaceUI extends UI {
 		private static final long serialVersionUID = 1L;
 
 		private final OnDemandStreamResource onDemandStreamResource;
+		private final String type;
 
 	
-		public OnDemandFileDownloader(OnDemandStreamResource onDemandStreamResource) {
+		public OnDemandFileDownloader(OnDemandStreamResource onDemandStreamResource,String type) {
 			super(new StreamResource(onDemandStreamResource, ""));
 			this.onDemandStreamResource = onDemandStreamResource;
+			this.type=type;
 		}
 		
 		 @Override
@@ -365,12 +578,34 @@ public class DrumbeatinterfaceUI extends UI {
 		  }
 
 		private StreamResource getResource() {
-			 StreamResource resource = new StreamResource(createOnDemandJSOnResource(),"output.srj");
-			return (StreamResource) resource ; // on the fl
+			if(type.equals("JSON"))
+			{
+			     StreamResource resource = new StreamResource(createOnDemandJSON_Resource(),"output.srj");
+			     return (StreamResource) resource ; 
+			}
+			else
+			{
+				 StreamResource resource = new StreamResource(createOnDemandXMLResource(),"output.xml");
+				 return (StreamResource) resource ; 
+				
+			}
 		}
 
 	}
 
+	
+	public String getRealEstate() {
+		String realEstate=null;
+		try {
+			realEstate = 	URLEncoder.encode((String) realEstates_tree_4upload.getValue(), "UTF-8");
+		} catch (Exception e) {
+			// nothing
+		}
+		if(realEstate==null)
+			return "";
+		return realEstate; 
+	}
+	
 	public void createModel(String model_name) {
 		marmotta_sparql.create_Model(model_name);
 		try {
@@ -385,12 +620,12 @@ public class DrumbeatinterfaceUI extends UI {
 	}
 
 	public void listRealEstates() {
-		realEstates_tree.removeAllItems();
+		sites_tree.removeAllItems();
 		realEstates_tree_4upload.removeAllItems();
 		List<String> realEstate_names = marmotta.httpGetDRUMRealEstates();
 		boolean used = false;
 		for (String name : realEstate_names) {
-			realEstates_tree.addItem(name);
+			sites_tree.addItem(name);
 			realEstates_tree_4upload.addItem(name);
 			if (!used) {
 				realEstates_tree_4upload.setValue(name); // The default value
@@ -402,8 +637,8 @@ public class DrumbeatinterfaceUI extends UI {
 		for (Pair pair : models) {
 			System.out.println("s "+pair.getS1());
 			System.out.println("o "+pair.getS2());
-			realEstates_tree.addItem(pair.getS2());
-			realEstates_tree.setParent(pair.getS2(), pair.getS1());
+			sites_tree.addItem(pair.getS2());
+			sites_tree.setParent(pair.getS2(), pair.getS1());
 		}
 	}
 
@@ -420,6 +655,21 @@ public class DrumbeatinterfaceUI extends UI {
 	public void updateData() {
 		listModels();
 		listIFCFiles();
+		List<String> contexts=marmotta.httpGetMarmottaContexts();
+		if(contexts!=null && contexts.size()>0)
+		{
+			contexts_selection.removeAllItems();
+			boolean set=false;
+			for(String c:contexts)
+			{
+				contexts_selection.addItem(c);
+				if(!set)
+				{
+					contexts_selection.setValue(c);
+					set=true;
+				}
+			}
+		}
 		marmotta.httpGetMarmottaContexts(contexts_table);
 		bimserver_jsonapi.getProjects(bim_projects_table, bim_projects);
 

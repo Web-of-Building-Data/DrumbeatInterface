@@ -48,9 +48,10 @@ SOFTWARE.
  */
 
 public class MarmottaAPI {
-	final String context_url = "http://drumbeat.cs.hut.fi/tomcat/marmotta/context/list?labels=true";
+	final String context_query_url = "http://drumbeat.cs.hut.fi/tomcat/marmotta/context/list?labels=true";
 	final String sparql_url_header = "http://drumbeat.cs.hut.fi/tomcat/marmotta/sparql/select?query=";
 	final String sparql_url_json_tail = "&output=json";
+	final String sparql_url_xml_tail = "&output=xml";
 	final String sparql_url_html_tail = "&output=html";
 	final String realEstateClass = "http://drumbeat.cs.hut.fi/tomcat/marmotta/resource/RealEstate";
 	final String modelClass = "http://drumbeat.cs.hut.fi/tomcat/marmotta/resource/Model";
@@ -70,7 +71,7 @@ public class MarmottaAPI {
 		}
 		try (CloseableHttpClient httpClient = HttpClientBuilder.create()
 				.build()) {
-			HttpGet request = new HttpGet(context_url);
+			HttpGet request = new HttpGet(context_query_url);
 			HttpResponse http_result = httpClient.execute(request);
 
 			String json = EntityUtils
@@ -95,7 +96,7 @@ public class MarmottaAPI {
 								row.getItemProperty("Graph").setValue("-");
 
 							Long size = (Long) project.get("size");
-							if (name != null)
+							if (size != null)
 								row.getItemProperty("Size").setValue(size);
 							else
 								row.getItemProperty("Size").setValue("-");
@@ -116,6 +117,48 @@ public class MarmottaAPI {
 		table.setPageLength(table.size());
 	}
 
+	final String contextbase="http://drumbeat.cs.hut.fi/tomcat/marmotta/context/";
+	public List<String> httpGetMarmottaContexts() {
+		List<String> ret=new ArrayList<String>();
+		try (CloseableHttpClient httpClient = HttpClientBuilder.create()
+				.build()) {
+			HttpGet request = new HttpGet(context_query_url);
+			HttpResponse http_result = httpClient.execute(request);
+
+			String json = EntityUtils
+					.toString(http_result.getEntity(), "UTF-8");
+			try {
+				JSONParser parser = new JSONParser();
+				Object resultObject = parser.parse(json);
+				if (resultObject instanceof JSONArray) {
+					JSONArray result = (JSONArray) resultObject;
+					if (result != null) {
+						for (Object obj : result) {
+
+							// Add a row the hard way
+
+							JSONObject project = (JSONObject) obj;
+							String name = (String) project.get("label");
+							Long size = (Long) project.get("size");
+							if (name != null & size != null)
+								if(size>500)
+								  ret.add(contextbase+name);
+						}
+					}
+
+				}
+
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+
+		} catch (IOException ex) {
+			ex.printStackTrace();
+		}
+		return ret;
+	}
+
+	
 	public List<String> httpGetDRUMRealEstates() {
 		List<String> ret=new ArrayList<String>();
 		String queryStr= "select $s where {?s <" + RDF.TYPE + "> <"+realEstateClass + ">} LIMIT 100";
@@ -340,5 +383,95 @@ public class MarmottaAPI {
 
 		return null;
 	}
+	
+	public String httpGetQuery2XML(String queryStr) {
+		String url=null;
+		try {
+			url=sparql_url_header+URLEncoder.encode(queryStr, "UTF-8")+sparql_url_xml_tail;
+		} catch (UnsupportedEncodingException e) {
+			e.printStackTrace();
+		}
+		try (CloseableHttpClient httpClient = HttpClientBuilder.create()
+				.build()) {
+			HttpGet request = new HttpGet(url);
+			HttpResponse http_result = httpClient.execute(request);
+			BufferedReader rd = new BufferedReader(
+					new InputStreamReader(http_result.getEntity().getContent()));
+			 
+				StringBuffer result = new StringBuffer();
+				String line = "";
+				while ((line = rd.readLine()) != null) {
+					result.append(line);
+				}
+				return result.toString();
+
+		} catch (IOException ex) {
+			ex.printStackTrace();
+		}
+
+		return null;
+	}
+
+
+	// Select from. to
+	public List<Pair> httpGetLinks(String queryStr) {
+		List<Pair> ret=new ArrayList<Pair>();
+		String url=null;
+		try {
+			url=sparql_url_header+URLEncoder.encode(queryStr, "UTF-8")+sparql_url_json_tail;
+		} catch (UnsupportedEncodingException e) {
+			e.printStackTrace();
+		}
+		try (CloseableHttpClient httpClient = HttpClientBuilder.create()
+				.build()) {
+			HttpGet request = new HttpGet(url);
+			HttpResponse http_result = httpClient.execute(request);
+
+			String json = EntityUtils
+					.toString(http_result.getEntity(), "UTF-8");
+			try {
+				JSONParser parser = new JSONParser();
+				Object rootObject = parser.parse(json);
+				if (rootObject instanceof JSONObject) {
+					JSONObject root = (JSONObject) rootObject;
+					if (root != null) {
+						
+						JSONObject results = (JSONObject) root.get("results");
+						if (results != null) {
+							
+							Object bindingsObject = results.get("bindings");
+							if (bindingsObject instanceof JSONArray) {
+								JSONArray bindings = (JSONArray) bindingsObject;
+								for(Object bObject:bindings)
+								{
+									JSONObject b=(JSONObject) bObject;
+									
+									Object sObject=b.get("from");
+									JSONObject s=(JSONObject) sObject;
+									String svalue=(String)s.get("value");
+									
+									
+									Object oObject=b.get("to");
+									JSONObject o=(JSONObject) oObject;
+									String ovalue=(String)o.get("value");
+									
+									ret.add(new Pair(svalue,ovalue));
+								}
+							}
+						}
+					}
+
+				}
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+
+		} catch (IOException ex) {
+			ex.printStackTrace();
+		}
+
+		return ret;
+	}
+
 	
 }

@@ -13,8 +13,6 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
-import java.net.MalformedURLException;
-import java.net.URL;
 import java.util.List;
 import java.util.Properties;
 
@@ -22,9 +20,10 @@ import org.apache.commons.io.IOUtils;
 import org.apache.http.HttpEntity;
 import org.apache.http.HttpResponse;
 import org.apache.http.client.methods.HttpGet;
-import org.apache.http.client.methods.HttpPost;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
+import org.apache.jena.riot.Lang;
+import org.apache.jena.riot.RDFDataMgr;
 import org.apache.jena.riot.RDFFormat;
 import org.apache.log4j.PropertyConfigurator;
 import org.buildingsmart.IfcConvertor;
@@ -48,8 +47,10 @@ import fi.hut.cs.drumbeat.ifc.convert.ifc2rdf.util.Ifc2RdfExportUtil;
 import fi.hut.cs.drumbeat.ifc.convert.step2ifc.util.IfcParserUtil;
 import fi.hut.cs.drumbeat.ifc.data.model.IfcModel;
 import fi.hut.cs.drumbeat.ifc.data.schema.IfcSchema;
-import fi.hut.cs.drumbeat.ifc.util.IfcModelAnalyser;
+import fi.hut.cs.drumbeat.ifc.processing.IfcModelAnalyser;
 import fi.hut.cs.drumbeat.rdf.RdfUtils;
+import fi.hut.cs.drumbeat.rdf.modelfactory.JenaModelFactoryBase;
+import fi.hut.cs.drumbeat.rdf.modelfactory.MemoryJenaModelFactory;
 import fi.ni.bimserver.BIMFileLoader;
 import fi.ni.ifc2rdf.lite.ExpressReader;
 import fi.ni.ifc2rdf.lite.IFC_ClassModel;
@@ -84,8 +85,8 @@ public class DrumbeatFileHandler implements Receiver, SucceededListener,
 	 */
 	private static final long serialVersionUID = -3353293504542269792L;
 	public File file;
-	final DrumbeatinterfaceUI parent;
-	final String uploads;
+	private final DrumbeatinterfaceUI parent;
+	private final String uploads;
 
 	public DrumbeatFileHandler(DrumbeatinterfaceUI parent, String uploads) {
 		this.parent = parent;
@@ -133,8 +134,7 @@ public class DrumbeatFileHandler implements Receiver, SucceededListener,
 	}
 
 	public void receiveFileFromURL(String url_string) {
-		if(url_string==null || url_string.length()==0)
-		{			
+		if (url_string == null || url_string.length() == 0) {
 			return;
 		}
 		if (!url_string.toLowerCase().endsWith(".ifc")) {
@@ -145,48 +145,45 @@ public class DrumbeatFileHandler implements Receiver, SucceededListener,
 			n.show(Page.getCurrent());
 			return;
 		}
-		CloseableHttpClient httpClient = HttpClientBuilder.create().build();	
-		HttpGet httpget = new HttpGet(url_string);		
+		CloseableHttpClient httpClient = HttpClientBuilder.create().build();
+		HttpGet httpget = new HttpGet(url_string);
 		HttpResponse response;
-		String urlfile=null;
-		if(url_string!=null)
-		{
-		  urlfile=url_string.substring( url_string.lastIndexOf('/')+1, url_string.length() );
+		String urlfile = null;
+		if (url_string != null) {
+			urlfile = url_string.substring(url_string.lastIndexOf('/') + 1,
+					url_string.length());
 		}
-		if(urlfile==null)
-		{			
+		if (urlfile == null) {
 			return;
 		}
-		
-		try {			
+
+		try {
 			response = httpClient.execute(httpget);
 			HttpEntity entity = response.getEntity();
 			if (entity != null) {
 				InputStream inputStream = entity.getContent();
-				File targetFile = new File(uploads+urlfile);
+				File targetFile = new File(uploads + urlfile);
 				OutputStream outputStream = new FileOutputStream(targetFile);
 				IOUtils.copy(inputStream, outputStream);
-			    outputStream.close();
+				outputStream.close();
 			}
-	} catch (Exception e) {
-		e.printStackTrace();
-		Notification n = new Notification("Could not read the URL: ",
-				e.getMessage(), Notification.Type.ERROR_MESSAGE);
-		n.setDelayMsec(5000);
-		n.show(Page.getCurrent());
-		return;
-	}
-	finally
-	{
-		try {
-			httpClient.close();
-		} catch (IOException e) {
+		} catch (Exception e) {
 			e.printStackTrace();
+			Notification n = new Notification("Could not read the URL: ",
+					e.getMessage(), Notification.Type.ERROR_MESSAGE);
+			n.setDelayMsec(5000);
+			n.show(Page.getCurrent());
+			return;
+		} finally {
+			try {
+				httpClient.close();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
 		}
-	}
-	File readyFile = new File(uploads+urlfile);
-	if(readyFile.exists())
-	   handleNewFile(readyFile);	
+		File readyFile = new File(uploads + urlfile);
+		if (readyFile.exists())
+			handleNewFile(readyFile);
 	}
 
 	private void handleNewFile(File file) {
@@ -195,17 +192,18 @@ public class DrumbeatFileHandler implements Receiver, SucceededListener,
 		if (file == null)
 			return;
 
+		String realEstate = parent.getRealEstate();
+		// set the properties value
+		String[] fname_array = file.getName().split("\\.");
+
 		try {
 
 			output = new FileOutputStream("/var/marmotta/home/import/config");
 
-			// set the properties value
-			String[] fname_array = file.getName().split("\\.");
-
 			prop.setProperty("context",
 					"http://drumbeat.cs.hut.fi/tomcat/marmotta/context/"
-							+ fname_array[0]);
-			prop.setProperty("label", fname_array[0]);
+							+ realEstate + "." + fname_array[0]);
+			prop.setProperty("label", realEstate + "." + fname_array[0]);
 			parent.createModel(fname_array[0]);
 			// save properties to project root folder
 			prop.store(output, null);
@@ -228,7 +226,7 @@ public class DrumbeatFileHandler implements Receiver, SucceededListener,
 		}
 
 		if (parent.converter_selection.getValue().equals("Default")) {
-			if (!convertIFC2RDFDefault(file))
+			if (!convertIFC2RDFDefault(file, realEstate + "." + fname_array[0]))
 				return; // Stop if the conversion fails
 		} else if (parent.converter_selection.getValue().equals(
 				"Ghent Multimedia Lab, buildingSMART")) {
@@ -279,7 +277,9 @@ public class DrumbeatFileHandler implements Receiver, SucceededListener,
 
 	}
 
-	private boolean convertIFC2RDFDefault(File file) {
+	final String metabase="http://drumbeat.cs.hut.fi/void/model/";
+	
+	private boolean convertIFC2RDFDefault(File file, String name) {
 		try {
 			IfcModel model = IfcParserUtil.parseModel(file.getAbsolutePath());
 			ComplexProcessorConfiguration groundingConfiguration = IfcModelAnalyser
@@ -294,7 +294,29 @@ public class DrumbeatFileHandler implements Receiver, SucceededListener,
 			RdfUtils.exportJenaModelToRdfFile(modelExport,
 					"/var/marmotta/home/import/" + file.getName(),
 					RDFFormat.TURTLE, false);
+			JenaModelFactoryBase jenaModelFactory = new MemoryJenaModelFactory();
+
+			try {
+				Model metaModelGraph = jenaModelFactory.createModel();
+
+				try {
+					metaModelGraph.read("/var/www/void.ttl", "TURTLE");
+				} catch (Exception e) {
+					e.printStackTrace();
+				}
+
+				Ifc2RdfExportUtil.exportMetaModelToJenaModel(metabase+name,metaModelGraph,
+						model); 
+				FileOutputStream fout = new FileOutputStream(new File(
+						"/var/www/void.ttl"));
+				RDFDataMgr.write(fout, metaModelGraph, RDFFormat.TURTLE_PRETTY);
+				fout.close();
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+
 		} catch (Exception e) {
+			e.printStackTrace();
 			Notification n = new Notification("Default IFC2RDF export error ",
 					e.getMessage(), Notification.Type.ERROR_MESSAGE);
 			n.setDelayMsec(5000);
@@ -327,7 +349,8 @@ public class DrumbeatFileHandler implements Receiver, SucceededListener,
 			File ttl_file = new File("/var/marmotta/home/import/"
 					+ file.getName() + ".ttl");
 			FileOutputStream fop = new FileOutputStream(ttl_file);
-			model.write(fop, "TURTLE");
+			model.write(fop, "TURTLE");			
+			fop.close();
 		} catch (Exception e) {
 			Notification n = new Notification("IFC2RDF lite export error ",
 					e.getMessage(), Notification.Type.ERROR_MESSAGE);
