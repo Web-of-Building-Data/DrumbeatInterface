@@ -1,7 +1,6 @@
 package fi.ni.bimserver;
 
 import java.io.IOException;
-import java.util.Date;
 import java.util.Map;
 
 import org.apache.http.HttpResponse;
@@ -15,10 +14,7 @@ import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 
 import com.vaadin.data.Item;
-import com.vaadin.server.ExternalResource;
-import com.vaadin.ui.BrowserFrame;
-import com.vaadin.ui.Table;
-import com.vaadin.ui.VerticalLayout;
+import com.vaadin.ui.ComboBox;
 /*
  * The MIT License (MIT)
 
@@ -89,7 +85,7 @@ public class BIMServerJSONApi {
 
 	
 
-	public void getProjects(Table table,Map<Integer, Long> projects) {
+	public void getProjects(ComboBox selection,Map<String, Long> projects) {
 		
 		if (token == null) {
 			System.err.println("No login");
@@ -97,8 +93,8 @@ public class BIMServerJSONApi {
 		}
 		try
 		{
-		  if(table.isVisible())
-		    table.removeAllItems();
+		  if(selection.isVisible())
+		    selection.removeAllItems();
 		}
 		catch(Exception e)
 		{
@@ -130,26 +126,15 @@ public class BIMServerJSONApi {
 				for (Object obj : get_result) {
 
 					// Add a row the hard way
-					Object newItemId = table.addItem();
-					Item row = table.getItem(newItemId);
-
+		
 					JSONObject project = (JSONObject) obj;
 					String name = (String) project.get("name");
 					if (name != null)
-						row.getItemProperty("Name").setValue(name);
-					else
-						row.getItemProperty("Name").setValue("-");
-
-					Long cdate = (Long) project.get("createdDate");
-					if (cdate != null)
-						row.getItemProperty("Created").setValue(
-								(new Date(cdate)).toString());
-					else
-						row.getItemProperty("Created").setValue("-");
+						selection.addItem(name);
 
 					Long project_id = (Long) project.get("oid");
 					if (project_id != null) {
-						projects.put(index++, project_id);
+						projects.put(name, project_id);
 					} else
 						System.err.println("ERROR no project ID!");
 
@@ -163,9 +148,6 @@ public class BIMServerJSONApi {
 				}
 			}
 		}
-		// Show exactly the currently contained rows (items)
-		table.setPageLength(table.size());
-
 
 	}
 

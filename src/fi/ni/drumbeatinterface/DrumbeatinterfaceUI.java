@@ -21,9 +21,12 @@ import com.vaadin.data.Item;
 import com.vaadin.data.Property;
 import com.vaadin.data.Property.ValueChangeEvent;
 import com.vaadin.data.Property.ValueChangeListener;
+import com.vaadin.event.ItemClickEvent;
+import com.vaadin.event.ItemClickEvent.ItemClickListener;
 import com.vaadin.server.ExternalResource;
 import com.vaadin.server.FileDownloader;
 import com.vaadin.server.FileResource;
+import com.vaadin.server.Page;
 import com.vaadin.server.StreamResource;
 import com.vaadin.server.StreamResource.StreamSource;
 import com.vaadin.server.VaadinRequest;
@@ -36,6 +39,7 @@ import com.vaadin.ui.ComboBox;
 import com.vaadin.ui.HorizontalLayout;
 import com.vaadin.ui.Image;
 import com.vaadin.ui.Link;
+import com.vaadin.ui.Notification;
 import com.vaadin.ui.OptionGroup;
 import com.vaadin.ui.Panel;
 import com.vaadin.ui.RichTextArea;
@@ -98,24 +102,24 @@ public class DrumbeatinterfaceUI extends UI {
 	TabSheet tabsheet = new TabSheet();
 	final Table files_table = new Table("Uploaded files");
 	final Table contexts_table = new Table("Marmotta Contexts list");
-	final Table bim_projects_table = new Table(
-			"Click the model to see the BIMServer view of the mdoel.");
+	final ComboBox bim_projects_selection = new ComboBox("BIMServer view of the model");
+	
 	final public OptionGroup converter_selection = new OptionGroup(
 			"Optionally an IFC to RDF converter can be selected");
 	final TextField url_textField = new TextField();
 	
 	// The field for inserting a new real estate
 	final TextField site_textField = new TextField();
-	final Tree sites_tree = new Tree("Sites and connected models");
+	final Tree sites_tree = new Tree("Sites and connected data sets");
 	final Map<String,TreeNode> treenodes = new HashMap<String,TreeNode>();
 	
-	final Tree models_tree = new Tree("Models that have a description");
+	final Tree datasets_tree = new Tree("Data sets that have a description");
 	
 	// Model Import Real estates list
-	final Tree realEstates_tree_4upload = new Tree("Attach the model to a site");
+	final Tree realEstates_tree_4upload = new Tree("Attach the data set to a site");
 	
 	// A map for project selections
-	Map<Integer, Long> bim_projects = new HashMap<Integer, Long>();
+	Map<String, Long> bim_projects = new HashMap<String, Long>();
 	final TextArea sparql_query_area = new TextArea("");
 	final RichTextArea sparql_result_rtarea = new RichTextArea();
 	final Table links_table = new Table("Links statements (Generation may take some time.)");
@@ -199,13 +203,61 @@ public class DrumbeatinterfaceUI extends UI {
 
 		// ========= REAL ESTATES ====================
 
-		VerticalLayout tab_realEstate = new VerticalLayout();
-		tab_realEstate.setCaption("Sites");
-		tabsheet.addTab(tab_realEstate);
+		VerticalLayout tab_site = new VerticalLayout();
+		tab_site.setCaption("Sites");
+		tabsheet.addTab(tab_site);
 
 		Panel p_project = new Panel("Create a sites");
 		p_project.setWidth("400");
-		tab_realEstate.addComponent(sites_tree);
+
+		
+		HorizontalLayout hor_sites = new HorizontalLayout();
+		hor_sites.addComponent(sites_tree);
+		final VerticalLayout project_browser4Sites = new VerticalLayout();
+		hor_sites.addComponent(project_browser4Sites);
+		tab_site.addComponent(hor_sites);
+		showBIMProject(project_browser4Sites,"Structural");
+		
+		sites_tree.addValueChangeListener(new Property.ValueChangeListener() {
+            private static final long serialVersionUID = 7237016481874141615L;
+            
+            Object previous = null;
+
+            public void valueChange(ValueChangeEvent event) {
+                if (! sites_tree.hasChildren(sites_tree.getValue()))
+                {
+                   if(sites_tree.getValue()!=null)
+                     showBIMProject(project_browser4Sites,sites_tree.getValue().toString());
+                }
+            }
+        });
+        sites_tree.setImmediate(true);
+		
+		
+		Button newRealEstate_button = new Button("Create",
+				new Button.ClickListener() {
+					@Override
+					public void buttonClick(Button.ClickEvent event) {
+						String realEstate_name = site_textField
+								.getValue();
+						if (realEstate_name != null
+								&& realEstate_name.length() > 0) {
+							marmotta_sparql.create_RealEstate(realEstate_name);
+							listRealEstates();
+						}
+					}
+				});
+
+		HorizontalLayout newproject_layout = new HorizontalLayout();
+		newproject_layout.setSizeUndefined();
+		site_textField.setImmediate(true);
+		newproject_layout.addComponent(site_textField);
+		newproject_layout.addComponent(newRealEstate_button);
+		newproject_layout.setSpacing(true);
+		p_project.setContent(newproject_layout);
+		tab_site.addComponent(p_project);
+
+
 		Button removeRealEstate_button = new Button(
 				"Remove the selected site", new Button.ClickListener() {
 					@Override
@@ -223,41 +275,20 @@ public class DrumbeatinterfaceUI extends UI {
 						}
 					}
 				});
-		tab_realEstate.addComponent(removeRealEstate_button);
-		tab_realEstate.addComponent(p_project);
+		tab_site.addComponent(removeRealEstate_button);
+		
 
-		site_textField.setImmediate(true);
-		Button newRealEstate_button = new Button("Create",
-				new Button.ClickListener() {
-					@Override
-					public void buttonClick(Button.ClickEvent event) {
-						String realEstate_name = site_textField
-								.getValue();
-						if (realEstate_name != null
-								&& realEstate_name.length() > 0) {
-							marmotta_sparql.create_RealEstate(realEstate_name);
-							listRealEstates();
-						}
-					}
-				});
-		HorizontalLayout newproject_layout = new HorizontalLayout();
-		newproject_layout.setSizeUndefined();
-		newproject_layout.addComponent(site_textField);
-		newproject_layout.addComponent(newRealEstate_button);
-		newproject_layout.setSpacing(true);
-		p_project.setContent(newproject_layout);
-
-		// ========= MODELS ====================
-		VerticalLayout tab_models = new VerticalLayout();
-		tab_models.setCaption("Models");
-		tabsheet.addTab(tab_models);
-		tab_models.addComponent(models_tree);
-		Link void_link = new Link("Void description of the models",
+		// ========= Data sets ====================
+		VerticalLayout tab_datasets = new VerticalLayout();
+		tab_datasets.setCaption("Data sets");
+		tabsheet.addTab(tab_datasets);
+		tab_datasets.addComponent(datasets_tree);
+		Link void_link = new Link("Void description of the data sets",
 		        new ExternalResource("http://drumbeat.cs.hut.fi/void.ttl"));
-		tab_models.addComponent(void_link);
+		tab_datasets.addComponent(void_link);
 		Panel p_model = new Panel("Upload and convert an IFC file");
 		p_model.setWidth("900");
-		tab_models.addComponent(p_model);
+		tab_datasets.addComponent(p_model);
 
 		HorizontalLayout hor1 = new HorizontalLayout();
 		hor1.setSizeFull(); // Use all available space
@@ -309,27 +340,24 @@ public class DrumbeatinterfaceUI extends UI {
 		url_upload.setSpacing(true);
 		p_model_url.setContent(url_upload);
 
-		
-		// Define two columns for the built-in container
-		bim_projects_table.addContainerProperty("Name", String.class, null);
-		bim_projects_table.addContainerProperty("Created", String.class, null);
-		bim_projects_table.setSelectable(true);
-		// Send changes in selection immediately to server.
-		bim_projects_table.setImmediate(true);
-
+		bim_projects_selection.setInvalidAllowed(false);
+		bim_projects_selection.setNullSelectionAllowed(false);
+		bim_projects_selection.setNewItemsAllowed(false);
+		bim_projects_selection.setWidth("400");
 		final VerticalLayout project_browser = new VerticalLayout();
-		// Handle selection change.
-		bim_projects_table.addValueChangeListener(new ValueChangeListener() {
-			public void valueChange(ValueChangeEvent event) {
+		bim_projects_selection.addListener(new Property.ValueChangeListener() {
+	            private static final long serialVersionUID = -5188369735622627751L;
 
-				if (bim_projects.size() > 0) {
-					showBIMProject(project_browser,
-							bim_projects.get(bim_projects_table.getValue()));
-				}
-			}
-		});
-		tab_models.addComponent(bim_projects_table);
-		tab_models.addComponent(project_browser);
+	            public void valueChange(ValueChangeEvent event) {
+	                if (bim_projects_selection.getValue() != null) {
+	                	showBIMProject(project_browser,
+								bim_projects.get(bim_projects_selection.getValue()));
+	                }
+	            }
+	        });
+		
+		tab_datasets.addComponent(bim_projects_selection);
+		tab_datasets.addComponent(project_browser);
 
 		
 		// ========= Queries ====================
@@ -490,8 +518,8 @@ public class DrumbeatinterfaceUI extends UI {
 
 		BrowserFrame browser = new BrowserFrame("", new ExternalResource(
 				"http://drumbeat.cs.hut.fi/home.html"));
-		browser.setWidth("1200px");
-		browser.setHeight("800px");
+		browser.setWidth("900px");
+		browser.setHeight("450px");
 		tab_internaldata.addComponent(browser);
 
 		files_table.addContainerProperty("File name", String.class, null);
@@ -508,6 +536,7 @@ public class DrumbeatinterfaceUI extends UI {
 		listRealEstates();
 	}
 
+	
 	private OnDemandStreamResource createOnDemandJSON_Resource() {
 		return new OnDemandStreamResource() {
 
@@ -646,18 +675,18 @@ public class DrumbeatinterfaceUI extends UI {
 		}
 	}
 
-	public void listModels() {
-		models_tree.removeAllItems();
+	public void listDataSets() {
+		datasets_tree.removeAllItems();
 		List<String> model_names = marmotta.httpGetModels();
 		System.out.println(model_names);
 		for (String name : model_names) {
-			models_tree.addItem(name);
+			datasets_tree.addItem(name);
 		}
 
 	}
 
 	public void updateData() {
-		listModels();
+		listDataSets();
 		listIFCFiles();
 		List<String> contexts=marmotta.httpGetMarmottaContexts();
 		if(contexts!=null && contexts.size()>0)
@@ -675,7 +704,7 @@ public class DrumbeatinterfaceUI extends UI {
 			}
 		}
 		marmotta.httpGetMarmottaContexts(contexts_table);
-		bimserver_jsonapi.getProjects(bim_projects_table, bim_projects);
+		bimserver_jsonapi.getProjects(bim_projects_selection, bim_projects);
 
 	}
 
@@ -713,8 +742,21 @@ public class DrumbeatinterfaceUI extends UI {
 				"http://drumbeat.cs.hut.fi/tomcat/bimviews/?page=Project&poid="
 						+ pid);
 		BrowserFrame bim_browser = new BrowserFrame("", er);
-		bim_browser.setWidth("1200px");
+		bim_browser.setWidth("900px");
 		bim_browser.setHeight("800px");
+
+		layout.addComponent(bim_browser);
+
+	}
+
+	private void showBIMProject(VerticalLayout layout, String project_name) {
+		layout.removeAllComponents();
+		ExternalResource er = new ExternalResource(
+				"http://drumbeat.cs.hut.fi/drumebeatview/?project="
+						+ project_name);
+		BrowserFrame bim_browser = new BrowserFrame("", er);
+		bim_browser.setWidth("700px");
+		bim_browser.setHeight("650px");
 
 		layout.addComponent(bim_browser);
 
